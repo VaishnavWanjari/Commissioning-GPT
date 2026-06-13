@@ -41,13 +41,18 @@
     ],
     "win": {
       "target": [
-        "nsis"
-      ],
-      "artifactName": "Commissioning-GPT-Setup-${version}.${ext}"
+        "nsis",
+        "portable"
+      ]
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Commissioning-GPT-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Commissioning-GPT-Portable-${version}.${ext}"
     }
   }
 }

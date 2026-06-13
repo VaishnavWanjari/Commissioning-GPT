@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Commissioning-GPT — SOP Generator</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">CG</span>
+          <div>
+            <div class="brand-title">Commissioning-GPT</div>
+            <div class="brand-sub">SOP Generator</div>
+          </div>
+        </div>
+        <nav id="nav">
+          <button class="nav-item active" data-view="upload"><span>⬆</span> Upload</button>
+          <button class="nav-item" data-view="library"><span>▤</span> Document Library <span class="badge" id="sel-badge" hidden>0</span></button>
+          <button class="nav-item" data-view="generator"><span>⚙</span> SOP Generator</button>
+          <button class="nav-item" data-view="chat"><span>✦</span> AI Assistant</button>
+          <button class="nav-item" data-view="standards"><span>§</span> Standards</button>
+        </nav>
+        <div class="sidebar-footer">
+          <span class="status-dot" id="status-dot"></span>
+          <span id="status-text">Connecting…</span>
+        </div>
+      </aside>
+
+      <main class="content">
+        <div id="banner-area"></div>
+
+        <!-- Upload -->
+        <section class="panel view" id="view-upload">
+          <header class="panel-header">
+            <h1>Upload Documents</h1>
+            <p class="muted">Vendor &amp; OEM manuals, datasheets, P&amp;IDs, cause &amp; effect, Aramco / API / ASME / IEC / ISO standards, scanned procedures and more.</p>
+          </header>
+          <div class="dropzone" id="dropzone">
+            <div class="dropzone-icon">⬆</div>
+            <div class="dropzone-title" id="drop-title">Drag &amp; drop files here</div>
+            <div class="muted">or click to browse</div>
+            <input type="file" id="file-input" multiple hidden
+              accept=".pdf,.docx,.xlsx,.xls,.pptx,.txt,.md,.csv,.log,.png,.jpg,.jpeg,.tif,.tiff,.bmp" />
+          </div>
+          <div id="upload-recent"></div>
+        </section>
+
+        <!-- Library -->
+        <section class="panel view" id="view-library" hidden>
+          <header class="panel-header">
+            <h1>Document Library</h1>
+            <p class="muted" id="lib-count">0 documents</p>
+          </header>
+          <input class="search" id="lib-search" placeholder="Search documents…" />
+          <div id="lib-table"></div>
+        </section>
+
+        <!-- Generator -->
+        <section class="panel view" id="view-generator" hidden>
+          <header class="panel-header">
+            <h1>SOP Generator</h1>
+            <p class="muted">Select source documents and a procedure type to generate a complete, audit-ready document (sections A–P).</p>
+          </header>
+          <div class="generator-grid">
+            <div class="card">
+              <h3>1 · Procedure type</h3>
+              <select id="sop-type"></select>
+              <h3 style="margin-top:18px">2 · Details (optional)</h3>
+              <label>Primary equipment / system</label>
+              <input id="g-equipment" placeholder="e.g. Centrifugal Pump P-101" />
+              <label>Title</label>
+              <input id="g-title" placeholder="Auto-generated if blank" />
+              <label>Document number</label>
+              <input id="g-docnum" placeholder="Auto-generated if blank" />
+              <label>Additional instructions</label>
+              <textarea id="g-instructions" rows="3" placeholder="e.g. Emphasise nitrogen purging and PTW requirements"></textarea>
+            </div>
+            <div class="card">
+              <h3>3 · Source documents (<span id="g-sel-count">0</span> selected)</h3>
+              <div id="g-doclist" class="check-list"></div>
+              <button class="primary big" id="btn-generate">Generate SOP</button>
+              <p class="muted small" id="g-hint"></p>
+            </div>
+          </div>
+          <div id="g-result"></div>
+        </section>
+
+        <!-- Chat -->
+        <section class="panel chat-panel view" id="view-chat" hidden>
+          <header class="panel-header">
+            <h1>AI Assistant</h1>
+            <p class="muted" id="chat-scope">Ask about your documents, procedures and standards.</p>
+          </header>
+          <div class="chat-thread" id="chat-thread">
+            <div class="empty">Try: “Summarise the commissioning prerequisites for P-101” or “Which API standards apply to this pump?”</div>
+          </div>
+          <div id="chat-sources" class="muted small"></div>
+          <div class="chat-input">
+            <textarea id="chat-input" rows="2" placeholder="Ask a question…"></textarea>
+            <button class="primary" id="btn-chat-send">Send</button>
+          </div>
+        </section>
+
+        <!-- Standards -->
+        <section class="panel view" id="view-standards" hidden>
+          <header class="panel-header">
+            <h1>Standards Library</h1>
+            <p class="muted">The generator recognises and maps references from these bodies. Upload the actual standard documents to have specific clauses cited.</p>
+          </header>
+          <div id="standards-table"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

@@ -8,8 +8,11 @@ Run in development with:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .api import chat, documents, export, generate
@@ -55,3 +58,16 @@ async def health() -> dict:
 async def sop_types() -> list[str]:
     """The list of procedure types the UI can offer."""
     return [t.value for t in SOPType]
+
+
+# --------------------------------------------------------------------------- #
+#  Built-in web UI (no Node / no build required)
+#
+#  Serving the static UI from the backend lets users run the whole app with
+#  only a per-user Python install (no admin rights). The Electron/React desktop
+#  app remains available separately under ../frontend. This mount is LAST so it
+#  never shadows the /api/* routes above.
+# --------------------------------------------------------------------------- #
+_WEB_DIR = Path(__file__).resolve().parent / "web"
+if _WEB_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=str(_WEB_DIR), html=True), name="web")

@@ -36,6 +36,23 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how the code maps to the
 
 ---
 
+## ⚡ Quick start on Windows — **no administrator needed**
+
+The backend ships a **built-in web UI**, so you can run the whole app with only a
+per-user Python install (no Node, no admin prompt):
+
+1. Install Python 3.11+ from python.org — **uncheck "Install for all users"**
+   (per-user, no admin) and **check "Add python.exe to PATH"**.
+2. Double-click **`setup-windows.bat`** (one-time), then set `OPENAI_API_KEY` in
+   `backend\.env`.
+3. Double-click **`run-windows.bat`** — it opens <http://127.0.0.1:8000> in your
+   browser.
+
+Full details, plus the no-admin Electron desktop build, are in
+[`docs/RUN_LOCAL_NO_ADMIN.md`](docs/RUN_LOCAL_NO_ADMIN.md).
+
+---
+
 ## Prerequisites
 
 - **Python 3.11+**
