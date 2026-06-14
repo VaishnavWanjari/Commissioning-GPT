@@ -102,6 +102,14 @@ class ExtractedEntities(BaseModel):
 # --------------------------------------------------------------------------- #
 #  SOP document structure (sections A–P)
 # --------------------------------------------------------------------------- #
+class RevisionHistoryRow(BaseModel):
+    revision: str = "0"
+    date: str = Field(default_factory=lambda: date.today().isoformat())
+    description: str = "Issued for Use"
+    prepared_by: str = ""
+    approved_by: str = ""
+
+
 class DocumentControl(BaseModel):
     """Section A — Document Control."""
 
@@ -112,15 +120,8 @@ class DocumentControl(BaseModel):
     checked_by: str = "Lead Commissioning Engineer"
     approved_by: str = "Commissioning Manager"
     issue_date: str = Field(default_factory=lambda: date.today().isoformat())
-    revision_history: list["RevisionHistoryRow"] = Field(default_factory=list)
+    revision_history: list[RevisionHistoryRow] = Field(default_factory=list)
 
-
-class RevisionHistoryRow(BaseModel):
-    revision: str = "0"
-    date: str = Field(default_factory=lambda: date.today().isoformat())
-    description: str = "Issued for Use"
-    prepared_by: str = ""
-    approved_by: str = ""
 
 
 class Purpose(BaseModel):
@@ -285,9 +286,6 @@ class SOPDocument(BaseModel):
     attachments: list[AttachmentRow] = Field(default_factory=list)
 
 
-DocumentControl.model_rebuild()
-
-
 # --------------------------------------------------------------------------- #
 #  API request / response models
 # --------------------------------------------------------------------------- #
@@ -306,15 +304,15 @@ class GenerateResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
-class ChatRequest(BaseModel):
-    message: str
-    doc_ids: list[str] = Field(default_factory=list)
-    history: list["ChatMessage"] = Field(default_factory=list)
-
-
 class ChatMessage(BaseModel):
     role: str  # "user" | "assistant"
     content: str
+
+
+class ChatRequest(BaseModel):
+    message: str
+    doc_ids: list[str] = Field(default_factory=list)
+    history: list[ChatMessage] = Field(default_factory=list)
 
 
 class ChatResponse(BaseModel):
@@ -325,6 +323,3 @@ class ChatResponse(BaseModel):
 class ExportRequest(BaseModel):
     sop: SOPDocument
     format: ExportFormat = ExportFormat.DOCX
-
-
-ChatRequest.model_rebuild()

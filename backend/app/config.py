@@ -57,8 +57,8 @@ class Settings(BaseSettings):
 
     @property
     def data_path(self) -> Path:
-        p = BACKEND_ROOT / self.data_dir
-        return p if Path(self.data_dir).is_absolute() is False else Path(self.data_dir)
+        p = Path(self.data_dir)
+        return p if p.is_absolute() else BACKEND_ROOT / p
 
     @property
     def uploads_path(self) -> Path:

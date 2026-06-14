@@ -1,29 +1,33 @@
+# Minimum-version pins (>=) so pip can pick a wheel compatible with whatever
+# Python you have (3.11–3.13). For a fully reproducible build, pin exact ==
+# versions instead.
+
 # ----- Web framework -----
-fastapi==0.115.5
-uvicorn[standard]==0.32.1
-python-multipart==0.0.18
-pydantic==2.10.3
-pydantic-settings==2.6.1
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
+pydantic>=2.6
+pydantic-settings>=2.2
 
 # ----- OpenAI / AI -----
-openai==1.57.0
+openai>=1.40
 
 # ----- RAG / vector store -----
-faiss-cpu==1.9.0
-numpy==2.1.3
-langchain-text-splitters==0.3.2
+faiss-cpu>=1.8
+numpy>=1.26
+langchain-text-splitters>=0.2
 
 # ----- Document ingestion -----
-PyMuPDF==1.25.1          # PDFs (fitz)
-python-docx==1.1.2       # Word .docx (read + write/export)
-openpyxl==3.1.5          # Excel .xlsx/.xls
-python-pptx==1.0.2       # PowerPoint .pptx
-Pillow==11.0.0           # image handling for OCR
-pytesseract==0.3.13      # OCR (requires system `tesseract` binary)
+PyMuPDF>=1.24        # PDFs (fitz)
+python-docx>=1.1     # Word .docx (read + write/export)
+openpyxl>=3.1        # Excel .xlsx/.xls
+python-pptx>=0.6.23  # PowerPoint .pptx
+Pillow>=10.2         # image handling for OCR
+pytesseract>=0.3.10  # OCR (requires system `tesseract` binary)
 
 # ----- Export -----
-reportlab==4.2.5         # PDF generation
+reportlab>=4.1       # PDF generation
 
 # ----- Tooling / tests -----
-pytest==8.3.4
-httpx==0.28.1
+pytest>=8.0
+httpx>=0.27
