@@ -129,7 +129,7 @@
                             android:layout_gravity="center"
                             android:contentDescription="Start Recording"
                             android:src="@drawable/ic_mic"
-                            app:fabSize="large"
+                            app:fabSize="normal"
                             app:backgroundTint="@color/primary" />
                     </FrameLayout>
 
