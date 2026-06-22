@@ -22,49 +22,40 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses || true
+        run: yes | sdkmanager --licenses 2>/dev/null || true
+
+      - name: Install Android SDK components
+        run: |
+          sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools" 2>/dev/null || true
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.5"
 
       - name: Grant execute permission to gradlew
         working-directory: android-app
         run: chmod +x gradlew
 
-      - name: Cache Gradle packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('android-app/**/*.gradle.kts', 'android-app/**/*.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
       - name: Build Debug APK
         working-directory: android-app
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: gradle assembleDebug --no-daemon --stacktrace
         env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
 
-      - name: Verify APK
+      - name: Verify APK exists
         working-directory: android-app
         run: |
           APK="app/build/outputs/apk/debug/app-debug.apk"
-          if [ -f "$APK" ]; then
-            echo "✅ APK built successfully!"
-            echo "📦 Size: $(du -sh $APK | cut -f1)"
-            ls -la "$APK"
-          else
-            echo "❌ APK not found!"
-            find . -name "*.apk" 2>/dev/null
-            exit 1
-          fi
+          ls -lh "$APK"
+          echo "APK_PATH=$GITHUB_WORKSPACE/android-app/$APK" >> $GITHUB_ENV
 
-      - name: Upload Debug APK
+      - name: Upload Debug APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: MOMRecorder-debug-apk
@@ -75,7 +66,7 @@ jobs:
   build-release:
     name: Build Release APK (unsigned)
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout repository
@@ -86,29 +77,27 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses || true
+        run: yes | sdkmanager --licenses 2>/dev/null || true
 
-      - name: Grant execute permission
-        working-directory: android-app
-        run: chmod +x gradlew
+      - name: Install Android SDK components
+        run: |
+          sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools" 2>/dev/null || true
 
-      - name: Cache Gradle
-        uses: actions/cache@v4
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-release-${{ hashFiles('android-app/**/*.gradle.kts', 'android-app/**/*.toml') }}
+          gradle-version: "8.5"
 
       - name: Build Release APK
         working-directory: android-app
-        run: ./gradlew assembleRelease --no-daemon
+        run: gradle assembleRelease --no-daemon
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
 
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
