@@ -13,8 +13,8 @@ class MomRecorderApp : Application() {
     private fun createChannels() {
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(
-            NotificationChannel("recording_channel", "Recording", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Active recording notifications"
+            NotificationChannel("recording_channel", "Shefali Recording", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Shows while Shefali is actively recording a meeting"
             }
         )
     }

@@ -116,12 +116,12 @@ class RecordingService : Service() {
             override fun onEndOfSpeech() {}
 
             override fun onResults(results: Bundle?) {
+                isListening = false
                 val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 val text = matches?.firstOrNull()
                 if (!text.isNullOrBlank()) {
                     broadcastTranscript(text, isFinal = true)
                 }
-                // Restart to keep listening
                 if (!isPaused && state == State.RECORDING) {
                     mainHandler?.postDelayed({ startListening() }, RESTART_DELAY_MS)
                 }
@@ -136,6 +136,7 @@ class RecordingService : Service() {
             }
 
             override fun onError(error: Int) {
+                isListening = false
                 val errMsg = speechErrorMessage(error)
                 Log.w(TAG, "Speech error: $errMsg")
                 if (!isPaused && state == State.RECORDING) {
@@ -143,9 +144,19 @@ class RecordingService : Service() {
                         SpeechRecognizer.ERROR_NO_MATCH,
                         SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> 300L
                         SpeechRecognizer.ERROR_NETWORK -> 2000L
+                        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> 1000L
                         else -> 500L
                     }
-                    mainHandler?.postDelayed({ startListening() }, delay)
+                    if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
+                        // Destroy stale recognizer and reinitialize before retrying
+                        try { speechRecognizer.destroy() } catch (e: Exception) { /* ignore */ }
+                        mainHandler?.postDelayed({
+                            initSpeechRecognizer()
+                            startListening()
+                        }, delay)
+                    } else {
+                        mainHandler?.postDelayed({ startListening() }, delay)
+                    }
                 }
             }
 
@@ -154,6 +165,7 @@ class RecordingService : Service() {
     }
 
     private fun startListening() {
+        if (!::speechRecognizer.isInitialized) return
         if (!isListening && state == State.RECORDING && !isPaused) {
             try {
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -226,7 +238,7 @@ class RecordingService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("MOM Recorder")
+            .setContentTitle("Shefali")
             .setContentText(status)
             .setSmallIcon(R.drawable.ic_mic)
             .setContentIntent(pendingIntent)
@@ -244,10 +256,10 @@ class RecordingService : Service() {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Recording Service",
+            "Shefali Recording",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Shows when MOM Recorder is actively recording"
+            description = "Shows while Shefali is actively recording a meeting"
             setShowBadge(true)
         }
         (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)

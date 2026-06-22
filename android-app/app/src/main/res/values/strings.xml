@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">MOM Recorder</string>
-    <string name="app_description">AI-Powered Meeting Minutes</string>
+    <string name="app_name">Shefali</string>
+    <string name="app_description">AI-Powered Meeting Assistant</string>
 
     <string name="action_settings">Settings</string>
     <string name="action_share">Share</string>

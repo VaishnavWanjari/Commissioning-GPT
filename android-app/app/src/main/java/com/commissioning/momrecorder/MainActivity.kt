@@ -95,10 +95,10 @@ class MainActivity : AppCompatActivity() {
         binding.layoutRecording.visibility = if (recording) View.VISIBLE else View.GONE
         binding.layoutHistory.visibility = if (!recording) View.VISIBLE else View.GONE
         binding.tabRecording.setTextColor(
-            if (recording) getColor(R.color.primary) else getColor(R.color.on_surface_variant)
+            if (recording) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#99FFFFFF")
         )
         binding.tabHistory.setTextColor(
-            if (!recording) getColor(R.color.primary) else getColor(R.color.on_surface_variant)
+            if (!recording) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#99FFFFFF")
         )
         if (!recording) viewModel.loadSavedMoms()
     }
@@ -346,7 +346,7 @@ class MainActivity : AppCompatActivity() {
             addAction(RecordingService.BROADCAST_TRANSCRIPT)
             addAction(RecordingService.BROADCAST_STATE)
         }
-        registerReceiver(transcriptReceiver, filter, RECEIVER_NOT_EXPORTED)
+        ContextCompat.registerReceiver(this, transcriptReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
     private fun formatDuration(millis: Long): String {
