@@ -42,7 +42,7 @@ class SettingsActivity : AppCompatActivity() {
             } else {
                 InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
             }
-            binding.etApiKey.setSelection(binding.etApiKey.text.length)
+            binding.etApiKey.setSelection(binding.etApiKey.text?.length ?: 0)
         }
 
         binding.btnSave.setOnClickListener {
