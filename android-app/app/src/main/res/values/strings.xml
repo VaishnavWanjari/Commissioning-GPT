@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MOM Recorder</string>
+    <string name="app_description">AI-Powered Meeting Minutes</string>
+
+    <string name="action_settings">Settings</string>
+    <string name="action_share">Share</string>
+    <string name="action_export_pdf">Export PDF</string>
+
+    <string name="tab_record">Record</string>
+    <string name="tab_history">History</string>
+
+    <string name="recording_idle">Tap microphone to start recording</string>
+    <string name="recording_active">Recording... Place phone near speakers</string>
+    <string name="recording_paused">Paused</string>
+
+    <string name="btn_generate_mom">Generate MOM with AI</string>
+    <string name="btn_stop">Stop Recording</string>
+    <string name="btn_save">Save Settings</string>
+
+    <string name="section_summary">Executive Summary</string>
+    <string name="section_decisions">Key Decisions</string>
+    <string name="section_actions">Action Items</string>
+    <string name="section_discussion">Discussion Points</string>
+    <string name="section_next_steps">Next Steps</string>
+    <string name="section_next_meeting">Next Meeting</string>
+    <string name="section_remarks">Remarks</string>
+
+    <string name="empty_transcript">No transcript yet. Start recording to see live transcription.</string>
+    <string name="empty_history">No MOM reports yet.\nRecord a meeting and generate your first report!</string>
+
+    <string name="error_no_api_key">Please configure your Claude API key in Settings.</string>
+    <string name="error_no_transcript">No transcript available. Please record a meeting first.</string>
+
+    <string name="fileprovider_authority">${applicationId}.fileprovider</string>
+
+    <string-array name="meeting_platforms">
+        <item>WhatsApp Video Call</item>
+        <item>Instagram Video Call</item>
+        <item>Zoom</item>
+        <item>Google Meet</item>
+        <item>Microsoft Teams</item>
+        <item>Other Video Call</item>
+        <item>In-Person Meeting</item>
+    </string-array>
+</resources>
