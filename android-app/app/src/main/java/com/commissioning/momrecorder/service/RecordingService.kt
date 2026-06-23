@@ -55,6 +55,10 @@ class RecordingService : Service() {
         super.onCreate()
         isRunning = true
         mainHandler = Handler(Looper.getMainLooper())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(CHANNEL_ID, "Recording", NotificationManager.IMPORTANCE_LOW)
+            (getSystemService(NotificationManager::class.java)).createNotificationChannel(channel)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
