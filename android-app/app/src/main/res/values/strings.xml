@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Minutes</string>
+    <string name="app_description">AI-Powered Meeting Minutes</string>
+
+    <string name="fileprovider_authority">${applicationId}.fileprovider</string>
+
+    <string-array name="meeting_platforms">
+        <item>WhatsApp Video Call</item>
+        <item>Instagram Video Call</item>
+        <item>Zoom</item>
+        <item>Google Meet</item>
+        <item>Microsoft Teams</item>
+        <item>Other Video Call</item>
+        <item>In-Person Meeting</item>
+    </string-array>
+</resources>
