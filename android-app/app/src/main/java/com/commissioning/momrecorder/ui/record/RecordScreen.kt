@@ -488,7 +488,7 @@ private fun TranscriptCard(
                             text = entry.text,
                             style = MaterialTheme.typography.bodyMedium,
                             color = if (entry.isFinal) Gray900 else Gray500,
-                            modifier = Modifier.animateItemPlacement()
+
                         )
                     }
                 }
