@@ -33,6 +33,7 @@ import com.commissioning.momrecorder.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecordScreen(
     vm: MainViewModel,
@@ -487,7 +488,7 @@ private fun TranscriptCard(
                             text = entry.text,
                             style = MaterialTheme.typography.bodyMedium,
                             color = if (entry.isFinal) Gray900 else Gray500,
-                            modifier = Modifier.animateItem()
+                            modifier = Modifier.animateItemPlacement()
                         )
                     }
                 }

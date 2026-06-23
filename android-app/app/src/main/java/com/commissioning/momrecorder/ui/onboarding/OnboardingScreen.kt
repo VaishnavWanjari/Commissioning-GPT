@@ -58,10 +58,10 @@ fun OnboardingScreen(onFinished: () -> Unit) {
                     title = "Microphone Access",
                     description = "Minutes needs your microphone to capture meeting speech and generate transcripts in Hindi and English.",
                     buttonLabel = if (micPermission.status.isGranted) "Continue →" else "Grant Microphone",
-                    isPermanentlyDenied = micPermission.status.isPermanentlyDenied(),
+                    isPermanentlyDenied = micPermission.isPermanentlyDenied(),
                     onAction = {
                         if (micPermission.status.isGranted) step = 2
-                        else if (micPermission.status.isPermanentlyDenied()) {
+                        else if (micPermission.isPermanentlyDenied()) {
                             context.startActivity(
                                 Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
                                     .apply { data = Uri.fromParts("package", context.packageName, null) }
@@ -78,11 +78,11 @@ fun OnboardingScreen(onFinished: () -> Unit) {
                         title = "Notifications",
                         description = "Minutes shows a notification while recording so you can control it without switching apps.",
                         buttonLabel = if (notifPermission?.status?.isGranted == true) "Get Started →" else "Allow Notifications",
-                        isPermanentlyDenied = notifPermission?.status?.isPermanentlyDenied() == true,
+                        isPermanentlyDenied = notifPermission?.isPermanentlyDenied() == true,
                         onAction = {
                             if (notifPermission?.status?.isGranted == true) {
                                 onFinished()
-                            } else if (notifPermission?.status?.isPermanentlyDenied() == true) {
+                            } else if (notifPermission?.isPermanentlyDenied() == true) {
                                 context.startActivity(
                                     Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
                                         .apply { data = Uri.fromParts("package", context.packageName, null) }
