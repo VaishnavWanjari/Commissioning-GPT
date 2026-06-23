@@ -32,6 +32,23 @@ object MomStorage {
         writeAll(context, list)
     }
 
+    fun updateActionStatus(
+        context: Context,
+        meetingId: String,
+        actionId: String,
+        newStatus: com.commissioning.momrecorder.model.ActionStatus
+    ) {
+        val list = loadAll(context).toMutableList()
+        val meetingIndex = list.indexOfFirst { it.id == meetingId }
+        if (meetingIndex < 0) return
+        val meeting = list[meetingIndex]
+        val updatedActions = meeting.actionItems.map { item ->
+            if (item.id == actionId) item.copy(status = newStatus) else item
+        }
+        list[meetingIndex] = meeting.copy(actionItems = updatedActions)
+        writeAll(context, list)
+    }
+
     private fun writeAll(context: Context, list: List<MomReport>) {
         File(context.filesDir, FILE_NAME).writeText(gson.toJson(list))
     }

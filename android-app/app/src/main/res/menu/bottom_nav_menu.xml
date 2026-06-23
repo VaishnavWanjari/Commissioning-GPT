@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_record"
+        android:icon="@drawable/ic_mic"
+        android:title="Record" />
+    <item
+        android:id="@+id/nav_history"
+        android:icon="@drawable/ic_document"
+        android:title="History" />
+    <item
+        android:id="@+id/nav_tracker"
+        android:icon="@drawable/ic_tracker"
+        android:title="Tracker" />
+</menu>

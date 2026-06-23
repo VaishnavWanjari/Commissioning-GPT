@@ -32,6 +32,9 @@
     <color name="priority_low">#2E7D32</color>
     <color name="priority_low_bg">#E8F5E9</color>
 
+    <!-- Recording accent -->
+    <color name="recording_red">#FF3B5C</color>
+
     <!-- Status Bar -->
     <color name="status_bar">#0D47A1</color>
 </resources>

@@ -1,6 +1,8 @@
 package com.commissioning.momrecorder
 
 import android.Manifest
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 import android.content.*
 import android.content.pm.PackageManager
 import android.os.Build
@@ -8,6 +10,7 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.animation.AnimationUtils
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -16,6 +19,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.commissioning.momrecorder.adapter.MomListAdapter
+import com.commissioning.momrecorder.adapter.TrackerAdapter
 import com.commissioning.momrecorder.adapter.TranscriptAdapter
 import com.commissioning.momrecorder.databinding.ActivityMainBinding
 import com.commissioning.momrecorder.model.MomReport
@@ -30,8 +34,11 @@ class MainActivity : AppCompatActivity() {
     private val viewModel: MainViewModel by viewModels()
     private lateinit var transcriptAdapter: TranscriptAdapter
     private lateinit var momListAdapter: MomListAdapter
+    private lateinit var trackerAdapter: TrackerAdapter
     private lateinit var prefs: PreferencesManager
-    private var isRecordingTabActive = true
+
+    private var waveAnimatorSet: AnimatorSet? = null
+    private var pulseAnimator: ObjectAnimator? = null
 
     private val transcriptReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -55,13 +62,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val requestPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { perms ->
-        if (perms[Manifest.permission.RECORD_AUDIO] == true) {
-            showStartRecordingDialog()
-        } else {
-            Toast.makeText(this, "Microphone permission is required to record meetings", Toast.LENGTH_LONG).show()
+    private val requestPermissions =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { perms ->
+            if (perms[Manifest.permission.RECORD_AUDIO] == true) {
+                showStartRecordingDialog()
+            } else {
+                Toast.makeText(this, "Microphone permission is required to record meetings", Toast.LENGTH_LONG).show()
+            }
         }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,40 +78,67 @@ class MainActivity : AppCompatActivity() {
         prefs = PreferencesManager(this)
 
         setSupportActionBar(binding.toolbar)
-        setupTabs()
-        setupRecordingTab()
-        setupMomListTab()
+        setupBottomNav()
+        setupRecordPanel()
+        setupHistoryPanel()
+        setupTrackerPanel()
         observeViewModel()
         registerReceivers()
 
-        // Show setup tip if no API key
         if (!prefs.hasApiKey()) {
-            binding.tvApiKeyWarning.visibility = View.VISIBLE
+            binding.cardApiWarning.visibility = View.VISIBLE
+        }
+
+        binding.btnGoSettings.setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
         }
     }
 
-    private fun setupTabs() {
-        binding.tabRecording.setOnClickListener { switchTab(true) }
-        binding.tabHistory.setOnClickListener { switchTab(false) }
-        switchTab(true)
+    // ===================== NAVIGATION =====================
+
+    private fun setupBottomNav() {
+        binding.bottomNav.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.nav_record -> { showPanel(Panel.RECORD); true }
+                R.id.nav_history -> { showPanel(Panel.HISTORY); true }
+                R.id.nav_tracker -> { showPanel(Panel.TRACKER); true }
+                else -> false
+            }
+        }
+        binding.bottomNav.selectedItemId = R.id.nav_record
     }
 
-    private fun switchTab(recording: Boolean) {
-        isRecordingTabActive = recording
-        binding.tabRecording.isSelected = recording
-        binding.tabHistory.isSelected = !recording
-        binding.layoutRecording.visibility = if (recording) View.VISIBLE else View.GONE
-        binding.layoutHistory.visibility = if (!recording) View.VISIBLE else View.GONE
-        binding.tabRecording.setTextColor(
-            if (recording) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#99FFFFFF")
-        )
-        binding.tabHistory.setTextColor(
-            if (!recording) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#99FFFFFF")
-        )
-        if (!recording) viewModel.loadSavedMoms()
+    private enum class Panel { RECORD, HISTORY, TRACKER }
+    private var currentPanel = Panel.RECORD
+
+    private fun showPanel(panel: Panel) {
+        if (panel == currentPanel) return
+        currentPanel = panel
+
+        val fadeIn = AnimationUtils.loadAnimation(this, R.anim.fade_in)
+        val fadeOut = AnimationUtils.loadAnimation(this, R.anim.fade_out)
+
+        val panels = listOf(binding.panelRecord, binding.panelHistory, binding.panelTracker)
+        val target = when (panel) {
+            Panel.RECORD -> binding.panelRecord
+            Panel.HISTORY -> { viewModel.loadSavedMoms(); binding.panelHistory }
+            Panel.TRACKER -> { viewModel.loadTrackerItems(); binding.panelTracker }
+        }
+
+        panels.forEach { p ->
+            if (p == target) {
+                p.startAnimation(fadeIn)
+                p.visibility = View.VISIBLE
+            } else if (p.visibility == View.VISIBLE) {
+                p.startAnimation(fadeOut)
+                p.visibility = View.GONE
+            }
+        }
     }
 
-    private fun setupRecordingTab() {
+    // ===================== RECORD PANEL =====================
+
+    private fun setupRecordPanel() {
         transcriptAdapter = TranscriptAdapter()
         binding.rvTranscript.apply {
             layoutManager = LinearLayoutManager(this@MainActivity).apply { stackFromEnd = true }
@@ -112,36 +147,34 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnRecord.setOnClickListener {
             when (viewModel.recordingState.value) {
-                MainViewModel.RecordingState.IDLE, MainViewModel.RecordingState.STOPPED -> checkAndStartRecording()
+                MainViewModel.RecordingState.IDLE,
+                MainViewModel.RecordingState.STOPPED -> checkAndStartRecording()
                 MainViewModel.RecordingState.RECORDING -> pauseRecording()
                 MainViewModel.RecordingState.PAUSED -> resumeRecording()
                 else -> {}
             }
         }
 
-        binding.btnStop.setOnClickListener { stopRecording() }
+        binding.btnStop.setOnClickListener { confirmStopRecording() }
 
         binding.btnGenerateMom.setOnClickListener {
-            if (prefs.hasApiKey()) {
-                showGenerateMomDialog()
-            } else {
-                showApiKeyRequiredDialog()
-            }
+            if (prefs.hasApiKey()) showGenerateMomDialog()
+            else showApiKeyRequiredDialog()
         }
 
         binding.btnClearTranscript.setOnClickListener {
             AlertDialog.Builder(this)
                 .setTitle("Clear Transcript")
-                .setMessage("Are you sure you want to clear the current transcript?")
-                .setPositiveButton("Clear") { _, _ ->
-                    viewModel.startSession()
-                }
+                .setMessage("Clear the current transcript?")
+                .setPositiveButton("Clear") { _, _ -> viewModel.startSession() }
                 .setNegativeButton("Cancel", null)
                 .show()
         }
     }
 
-    private fun setupMomListTab() {
+    // ===================== HISTORY PANEL =====================
+
+    private fun setupHistoryPanel() {
         momListAdapter = MomListAdapter(
             onClick = { mom -> openMomDetail(mom) },
             onDelete = { mom ->
@@ -158,6 +191,25 @@ class MainActivity : AppCompatActivity() {
             adapter = momListAdapter
         }
     }
+
+    // ===================== TRACKER PANEL =====================
+
+    private fun setupTrackerPanel() {
+        trackerAdapter = TrackerAdapter { meetingId, actionId, newStatus ->
+            viewModel.updateActionStatus(meetingId, actionId, newStatus)
+        }
+        binding.rvTracker.apply {
+            layoutManager = LinearLayoutManager(this@MainActivity)
+            adapter = trackerAdapter
+        }
+
+        binding.chipAll.setOnClickListener { viewModel.setTrackerFilter("ALL") }
+        binding.chipPending.setOnClickListener { viewModel.setTrackerFilter("PENDING") }
+        binding.chipInProgress.setOnClickListener { viewModel.setTrackerFilter("IN_PROGRESS") }
+        binding.chipDone.setOnClickListener { viewModel.setTrackerFilter("COMPLETED") }
+    }
+
+    // ===================== OBSERVERS =====================
 
     private fun observeViewModel() {
         viewModel.transcriptEntries.observe(this) { entries ->
@@ -180,7 +232,8 @@ class MainActivity : AppCompatActivity() {
 
         viewModel.momGenerating.observe(this) { generating ->
             binding.progressMom.visibility = if (generating) View.VISIBLE else View.GONE
-            binding.btnGenerateMom.isEnabled = !generating
+            binding.btnGenerateMom.isEnabled = !generating &&
+                (viewModel.transcriptEntries.value?.any { it.isFinal } == true)
         }
 
         viewModel.generatedMom.observe(this) { mom ->
@@ -198,18 +251,30 @@ class MainActivity : AppCompatActivity() {
             momListAdapter.submitList(moms)
             binding.tvEmptyHistory.visibility = if (moms.isEmpty()) View.VISIBLE else View.GONE
         }
+
+        viewModel.trackerItems.observe(this) { items ->
+            trackerAdapter.submitList(items)
+            binding.tvEmptyTracker.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
+            binding.rvTracker.visibility = if (items.isEmpty()) View.GONE else View.VISIBLE
+        }
     }
+
+    // ===================== RECORDING UI =====================
 
     private fun updateRecordingUI(state: MainViewModel.RecordingState) {
         when (state) {
-            MainViewModel.RecordingState.IDLE, MainViewModel.RecordingState.STOPPED -> {
+            MainViewModel.RecordingState.IDLE,
+            MainViewModel.RecordingState.STOPPED -> {
                 binding.btnRecord.setImageResource(R.drawable.ic_mic)
                 binding.btnRecord.contentDescription = "Start Recording"
                 binding.btnStop.visibility = View.GONE
                 binding.tvRecordingStatus.text = "Tap to start recording"
                 binding.tvRecordingStatus.setTextColor(getColor(R.color.on_surface_variant))
                 binding.recordingPulse.visibility = View.GONE
+                binding.waveformContainer.visibility = View.GONE
                 binding.tvDuration.text = "00:00"
+                stopWaveAnimation()
+                stopPulseAnimation()
             }
             MainViewModel.RecordingState.RECORDING -> {
                 binding.btnRecord.setImageResource(R.drawable.ic_pause)
@@ -218,17 +283,71 @@ class MainActivity : AppCompatActivity() {
                 binding.tvRecordingStatus.text = "Recording..."
                 binding.tvRecordingStatus.setTextColor(getColor(R.color.error))
                 binding.recordingPulse.visibility = View.VISIBLE
+                binding.waveformContainer.visibility = View.VISIBLE
+                startWaveAnimation()
+                startPulseAnimation()
             }
             MainViewModel.RecordingState.PAUSED -> {
                 binding.btnRecord.setImageResource(R.drawable.ic_mic)
                 binding.btnRecord.contentDescription = "Resume Recording"
                 binding.btnStop.visibility = View.VISIBLE
-                binding.tvRecordingStatus.text = "Paused - tap to resume"
+                binding.tvRecordingStatus.text = "Paused — tap to resume"
                 binding.tvRecordingStatus.setTextColor(getColor(R.color.on_surface_variant))
                 binding.recordingPulse.visibility = View.GONE
+                binding.waveformContainer.visibility = View.GONE
+                stopWaveAnimation()
+                stopPulseAnimation()
             }
         }
     }
+
+    // ===================== WAVE ANIMATION =====================
+
+    private fun startWaveAnimation() {
+        val bars = listOf(
+            binding.waveBar1, binding.waveBar2, binding.waveBar3,
+            binding.waveBar4, binding.waveBar5
+        )
+        val durations = longArrayOf(400, 300, 500, 350, 450)
+        val maxScales = floatArrayOf(3f, 2.5f, 4f, 2.8f, 3.2f)
+
+        val animators = bars.mapIndexed { i, bar ->
+            ObjectAnimator.ofFloat(bar, "scaleY", 1f, maxScales[i], 1f).apply {
+                duration = durations[i]
+                repeatCount = ObjectAnimator.INFINITE
+                repeatMode = ObjectAnimator.REVERSE
+                startDelay = (i * 80).toLong()
+            }
+        }
+        waveAnimatorSet = AnimatorSet().apply {
+            playTogether(*animators.toTypedArray())
+            start()
+        }
+    }
+
+    private fun stopWaveAnimation() {
+        waveAnimatorSet?.cancel()
+        waveAnimatorSet = null
+        listOf(binding.waveBar1, binding.waveBar2, binding.waveBar3,
+            binding.waveBar4, binding.waveBar5).forEach { it.scaleY = 1f }
+    }
+
+    private fun startPulseAnimation() {
+        pulseAnimator = ObjectAnimator.ofFloat(binding.recordingPulse, "alpha", 0.7f, 0f).apply {
+            duration = 900
+            repeatCount = ObjectAnimator.INFINITE
+            repeatMode = ObjectAnimator.RESTART
+            start()
+        }
+    }
+
+    private fun stopPulseAnimation() {
+        pulseAnimator?.cancel()
+        pulseAnimator = null
+        binding.recordingPulse.alpha = 1f
+    }
+
+    // ===================== RECORDING CONTROL =====================
 
     private fun checkAndStartRecording() {
         val permissions = buildList {
@@ -238,24 +357,22 @@ class MainActivity : AppCompatActivity() {
                 ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) add(Manifest.permission.POST_NOTIFICATIONS)
         }
-        if (permissions.isEmpty()) {
-            showStartRecordingDialog()
-        } else {
-            requestPermissions.launch(permissions.toTypedArray())
-        }
+        if (permissions.isEmpty()) showStartRecordingDialog()
+        else requestPermissions.launch(permissions.toTypedArray())
     }
 
     private fun showStartRecordingDialog() {
-        val platforms = arrayOf("WhatsApp Video Call", "Instagram Video Call", "Zoom", "Google Meet", "Teams", "Other")
+        val platforms = arrayOf(
+            "WhatsApp Video Call", "Instagram Video Call",
+            "Zoom", "Google Meet", "Teams", "Phone Call", "Other"
+        )
         var selectedPlatform = 0
-
         AlertDialog.Builder(this)
             .setTitle("Start Recording")
-            .setMessage("MOM Recorder will transcribe the meeting audio from your microphone.\n\nSelect the platform:")
+            .setMessage("Shefali will capture speech from your microphone during the call.\n\nSelect the platform:")
             .setSingleChoiceItems(platforms, 0) { _, which -> selectedPlatform = which }
             .setPositiveButton("Start") { _, _ ->
-                val platform = platforms[selectedPlatform]
-                startRecordingService(platform)
+                startRecordingService(platforms[selectedPlatform])
             }
             .setNegativeButton("Cancel", null)
             .show()
@@ -263,10 +380,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun startRecordingService(platform: String) {
         viewModel.startSession(title = "Meeting on $platform")
-        val intent = Intent(this, RecordingService::class.java).apply {
+        startForegroundService(Intent(this, RecordingService::class.java).apply {
             action = RecordingService.ACTION_START
-        }
-        startForegroundService(intent)
+        })
     }
 
     private fun pauseRecording() {
@@ -281,10 +397,10 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    private fun stopRecording() {
+    private fun confirmStopRecording() {
         AlertDialog.Builder(this)
             .setTitle("Stop Recording")
-            .setMessage("Stop the current recording?")
+            .setMessage("Stop the current recording session?")
             .setPositiveButton("Stop") { _, _ ->
                 startService(Intent(this, RecordingService::class.java).apply {
                     action = RecordingService.ACTION_STOP
@@ -295,14 +411,16 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    // ===================== DIALOGS =====================
+
     private fun showGenerateMomDialog() {
         val titleInput = android.widget.EditText(this).apply {
             hint = "Meeting title (optional)"
-            setPadding(48, 24, 48, 24)
+            setPadding(64, 32, 64, 16)
         }
         AlertDialog.Builder(this)
             .setTitle("Generate MOM Report")
-            .setMessage("AI will analyze your transcript and generate a professional Minutes of Meeting report.")
+            .setMessage("AI will analyze the transcript (Hindi + English) and produce a professional English MOM.")
             .setView(titleInput)
             .setPositiveButton("Generate") { _, _ ->
                 viewModel.generateMom(
@@ -317,7 +435,7 @@ class MainActivity : AppCompatActivity() {
     private fun showMomReadyDialog(mom: MomReport) {
         AlertDialog.Builder(this)
             .setTitle("MOM Ready!")
-            .setMessage("Your MOM report has been generated with ${mom.actionItems.size} action items.")
+            .setMessage("Report generated with ${mom.actionItems.size} action item(s).")
             .setPositiveButton("View MOM") { _, _ -> openMomDetail(mom) }
             .setNeutralButton("View Later", null)
             .show()
@@ -326,7 +444,7 @@ class MainActivity : AppCompatActivity() {
     private fun showApiKeyRequiredDialog() {
         AlertDialog.Builder(this)
             .setTitle("API Key Required")
-            .setMessage("A Claude API key is required to generate MOM reports. Please add your API key in Settings.")
+            .setMessage("A Claude API key is required to generate MOM reports. Please add it in Settings.")
             .setPositiveButton("Settings") { _, _ ->
                 startActivity(Intent(this, SettingsActivity::class.java))
             }
@@ -335,18 +453,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openMomDetail(mom: MomReport) {
-        val intent = Intent(this, MomDetailActivity::class.java).apply {
+        startActivity(Intent(this, MomDetailActivity::class.java).apply {
             putExtra(MomDetailActivity.EXTRA_MOM, mom)
-        }
-        startActivity(intent)
+        })
     }
+
+    // ===================== UTILS =====================
 
     private fun registerReceivers() {
         val filter = IntentFilter().apply {
             addAction(RecordingService.BROADCAST_TRANSCRIPT)
             addAction(RecordingService.BROADCAST_STATE)
         }
-        ContextCompat.registerReceiver(this, transcriptReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        ContextCompat.registerReceiver(
+            this, transcriptReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED
+        )
     }
 
     private fun formatDuration(millis: Long): String {
@@ -372,6 +493,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        stopWaveAnimation()
+        stopPulseAnimation()
         try { unregisterReceiver(transcriptReceiver) } catch (e: Exception) { /* ignore */ }
     }
 }

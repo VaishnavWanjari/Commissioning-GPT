@@ -8,8 +8,10 @@ import androidx.lifecycle.viewModelScope
 import com.commissioning.momrecorder.api.ClaudeApiClient
 import com.commissioning.momrecorder.api.MeetingContext
 import com.commissioning.momrecorder.api.MomParser
+import com.commissioning.momrecorder.model.ActionStatus
 import com.commissioning.momrecorder.model.MomReport
 import com.commissioning.momrecorder.model.RecordingSession
+import com.commissioning.momrecorder.model.TrackerItem
 import com.commissioning.momrecorder.model.TranscriptEntry
 import com.commissioning.momrecorder.util.MomStorage
 import com.commissioning.momrecorder.util.PreferencesManager
@@ -45,6 +47,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _savedMoms = MutableLiveData<List<MomReport>>(emptyList())
     val savedMoms: LiveData<List<MomReport>> = _savedMoms
+
+    private val _trackerItems = MutableLiveData<List<TrackerItem>>(emptyList())
+    val trackerItems: LiveData<List<TrackerItem>> = _trackerItems
 
     init {
         loadSavedMoms()
@@ -144,6 +149,53 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             MomStorage.delete(getApplication(), id)
             loadSavedMoms()
         }
+    }
+
+    fun loadTrackerItems(filter: String = "ALL") {
+        viewModelScope.launch(Dispatchers.IO) {
+            val moms = MomStorage.loadAll(getApplication())
+            val items = moms.flatMap { mom ->
+                mom.actionItems.map { action ->
+                    TrackerItem(
+                        actionItem = action,
+                        meetingTitle = mom.meetingTitle,
+                        meetingId = mom.id,
+                        meetingDate = mom.date
+                    )
+                }
+            }.filter { item ->
+                when (filter) {
+                    "PENDING" -> item.actionItem.status == ActionStatus.PENDING
+                    "IN_PROGRESS" -> item.actionItem.status == ActionStatus.IN_PROGRESS
+                    "COMPLETED" -> item.actionItem.status == ActionStatus.COMPLETED
+                    else -> true
+                }
+            }.sortedWith(
+                compareBy(
+                    { it.actionItem.status.ordinal },
+                    { it.actionItem.priority.ordinal }
+                )
+            )
+            withContext(Dispatchers.Main) {
+                _trackerItems.value = items
+            }
+        }
+    }
+
+    fun updateActionStatus(meetingId: String, actionId: String, newStatus: ActionStatus) {
+        viewModelScope.launch(Dispatchers.IO) {
+            MomStorage.updateActionStatus(getApplication(), meetingId, actionId, newStatus)
+            withContext(Dispatchers.Main) {
+                val currentFilter = _currentTrackerFilter
+                loadTrackerItems(currentFilter)
+            }
+        }
+    }
+
+    private var _currentTrackerFilter = "ALL"
+    fun setTrackerFilter(filter: String) {
+        _currentTrackerFilter = filter
+        loadTrackerItems(filter)
     }
 
     fun clearError() { _error.value = null }

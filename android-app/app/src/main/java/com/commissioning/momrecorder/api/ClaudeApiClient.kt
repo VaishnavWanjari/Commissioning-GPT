@@ -37,7 +37,14 @@ class ClaudeApiClient(private val apiKey: String) {
             if (ctx.date.isNotBlank()) append("Date: ${ctx.date}\n") else append("Date: $today\n")
         }
 
-        return """You are an expert professional meeting minutes (MOM) writer. Analyze the following meeting transcript and generate a comprehensive, professional MOM report.
+        return """You are an expert professional meeting minutes (MOM) writer with fluency in Hindi and English.
+
+IMPORTANT LANGUAGE INSTRUCTIONS:
+- The transcript may contain Hindi (Devanagari script), Hinglish (Hindi written in Roman letters), English, or a mixture of all three.
+- Understand the full meaning and intent of whatever language is used.
+- Write the entire MOM report in formal, professional English only.
+- Translate any Hindi or Hinglish content into clear English, preserving the original intent accurately.
+- Do NOT transliterate; translate the meaning.
 
 MEETING CONTEXT:
 $contextInfo
@@ -45,7 +52,7 @@ $contextInfo
 TRANSCRIPT:
 $transcript
 
-Generate a detailed MOM as a JSON object with this exact structure. Be thorough, professional and extract every important detail:
+Analyze the transcript (which may be in Hindi, English or mixed) and generate a comprehensive, professional MOM report in English with this exact JSON structure:
 
 {
   "meetingTitle": "infer a professional meeting title from context",
@@ -55,41 +62,42 @@ Generate a detailed MOM as a JSON object with this exact structure. Be thorough,
   "location": "WhatsApp/Instagram Video Call or as mentioned",
   "attendees": ["list of all speakers/participants identified from transcript"],
   "facilitator": "meeting host/facilitator name if identifiable",
-  "summary": "Professional 2-3 paragraph executive summary covering what was discussed and key outcomes",
+  "summary": "Professional 2-3 paragraph executive summary in English covering what was discussed and key outcomes",
   "keyDecisions": [
     {
-      "decision": "specific decision made",
-      "context": "why this decision was made"
+      "decision": "specific decision made (in English)",
+      "context": "why this decision was made (in English)"
     }
   ],
   "actionItems": [
     {
-      "action": "specific actionable task",
+      "action": "specific actionable task in English",
       "assignedTo": "person responsible (use 'Team' if unclear)",
-      "dueDate": "specific date or timeline (e.g. 'by Friday', '2 weeks', 'EOD')",
+      "dueDate": "specific date or timeline (e.g. 'by Friday', '2 weeks', 'End of Day')",
       "priority": "HIGH or MEDIUM or LOW based on urgency discussed",
       "status": "PENDING",
-      "remarks": "any additional notes about this action"
+      "remarks": "any additional notes about this action in English"
     }
   ],
   "discussionPoints": [
-    "key topic discussed 1",
-    "key topic discussed 2"
+    "key topic discussed 1 (in English)",
+    "key topic discussed 2 (in English)"
   ],
   "nextSteps": [
-    "immediate next step 1",
-    "immediate next step 2"
+    "immediate next step 1 (in English)",
+    "immediate next step 2 (in English)"
   ],
   "nextMeetingDate": "date/time of next meeting if mentioned, otherwise empty string",
-  "remarks": "any other important notes, concerns, or observations"
+  "remarks": "any other important notes, concerns, or observations in English"
 }
 
 Rules:
 - Extract ALL action items mentioned - these are critical
 - Identify who is responsible for each action (name or role)
-- Extract any dates, deadlines, or timelines mentioned
+- Extract any dates, deadlines, or timelines mentioned (translate from Hindi if needed)
 - Prioritize HIGH for urgent/critical items, MEDIUM for regular items, LOW for optional
-- Be professional and formal in language
+- ALL output must be in formal English regardless of input language
+- Preserve the intent and meaning from Hindi/Hinglish content faithfully
 - If a piece of information is not available, use empty string or empty array
 - Return ONLY valid JSON, no markdown, no extra text"""
     }
