@@ -11,7 +11,6 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.commissioning.momrecorder.MainActivity
 import com.commissioning.momrecorder.R
-import com.commissioning.momrecorder.model.TranscriptEntry
 import kotlinx.coroutines.*
 
 class RecordingService : Service() {
@@ -26,23 +25,28 @@ class RecordingService : Service() {
         const val ACTION_STOP = "ACTION_STOP"
         const val ACTION_PAUSE = "ACTION_PAUSE"
         const val ACTION_RESUME = "ACTION_RESUME"
+
         const val BROADCAST_TRANSCRIPT = "com.commissioning.momrecorder.TRANSCRIPT"
         const val BROADCAST_STATE = "com.commissioning.momrecorder.STATE"
+        const val BROADCAST_ERROR = "com.commissioning.momrecorder.ERROR"
+
         const val EXTRA_TEXT = "extra_text"
         const val EXTRA_IS_FINAL = "extra_is_final"
         const val EXTRA_STATE = "extra_state"
         const val EXTRA_DURATION = "extra_duration"
+        const val EXTRA_ERROR_MSG = "extra_error_msg"
 
         var isRunning = false
     }
 
-    private lateinit var speechRecognizer: SpeechRecognizer
+    private var speechRecognizer: SpeechRecognizer? = null
     private var mainHandler: Handler? = null
-    private var serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var isListening = false
     private var isPaused = false
     private var startTime = 0L
-    private var durationTimer: Job? = null
+    private var durationJob: Job? = null
+    private var consecutiveErrors = 0
 
     enum class State { IDLE, RECORDING, PAUSED, STOPPED }
     private var state = State.IDLE
@@ -51,7 +55,6 @@ class RecordingService : Service() {
         super.onCreate()
         isRunning = true
         mainHandler = Handler(Looper.getMainLooper())
-        createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -68,15 +71,16 @@ class RecordingService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID,
-                buildNotification("Recording..."),
+                buildNotification("Recording…"),
                 android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
             )
         } else {
-            startForeground(NOTIFICATION_ID, buildNotification("Recording..."))
+            startForeground(NOTIFICATION_ID, buildNotification("Recording…"))
         }
         startTime = System.currentTimeMillis()
         state = State.RECORDING
         isPaused = false
+        consecutiveErrors = 0
         initSpeechRecognizer()
         startListening()
         startDurationTimer()
@@ -87,7 +91,7 @@ class RecordingService : Service() {
         isPaused = true
         state = State.PAUSED
         stopListening()
-        durationTimer?.cancel()
+        durationJob?.cancel()
         updateNotification("Paused")
         broadcastState(State.PAUSED)
     }
@@ -95,29 +99,32 @@ class RecordingService : Service() {
     private fun resumeRecording() {
         isPaused = false
         state = State.RECORDING
+        consecutiveErrors = 0
         startListening()
         startDurationTimer()
-        updateNotification("Recording...")
+        updateNotification("Recording…")
         broadcastState(State.RECORDING)
     }
 
     private fun stopRecordingAndSelf() {
         state = State.STOPPED
-        durationTimer?.cancel()
+        durationJob?.cancel()
         stopListening()
+        destroyRecognizer()
         broadcastState(State.STOPPED)
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
     private fun initSpeechRecognizer() {
+        destroyRecognizer()
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            Log.e(TAG, "Speech recognition not available")
+            broadcastError("Speech recognition not available on this device.")
             return
         }
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
-        speechRecognizer.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) {}
+        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) { consecutiveErrors = 0 }
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
@@ -125,39 +132,50 @@ class RecordingService : Service() {
 
             override fun onResults(results: Bundle?) {
                 isListening = false
-                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                val text = matches?.firstOrNull()
-                if (!text.isNullOrBlank()) {
-                    broadcastTranscript(text, isFinal = true)
-                }
+                consecutiveErrors = 0
+                val text = results
+                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull()
+                if (!text.isNullOrBlank()) broadcastTranscript(text, isFinal = true)
                 if (!isPaused && state == State.RECORDING) {
                     mainHandler?.postDelayed({ startListening() }, RESTART_DELAY_MS)
                 }
             }
 
             override fun onPartialResults(partialResults: Bundle?) {
-                val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                val text = matches?.firstOrNull()
-                if (!text.isNullOrBlank()) {
-                    broadcastTranscript(text, isFinal = false)
-                }
+                val text = partialResults
+                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull()
+                if (!text.isNullOrBlank()) broadcastTranscript(text, isFinal = false)
             }
 
             override fun onError(error: Int) {
                 isListening = false
-                val errMsg = speechErrorMessage(error)
-                Log.w(TAG, "Speech error: $errMsg")
+                consecutiveErrors++
+                val msg = speechErrorMessage(error)
+                Log.w(TAG, "STT error #$consecutiveErrors: $msg")
+
+                // Actionable errors: notify UI
+                if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+                    broadcastError("Microphone permission denied. Please grant it in Settings.")
+                    stopRecordingAndSelf()
+                    return
+                }
+                if (error == SpeechRecognizer.ERROR_AUDIO) {
+                    broadcastError("Cannot access microphone. Is another app using it? Try starting Minutes BEFORE your call.")
+                    // Don't stop — keep retrying in case mic frees up
+                }
+
                 if (!isPaused && state == State.RECORDING) {
                     val delay = when (error) {
                         SpeechRecognizer.ERROR_NO_MATCH,
                         SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> 300L
-                        SpeechRecognizer.ERROR_NETWORK -> 2000L
-                        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> 1000L
-                        else -> 500L
+                        SpeechRecognizer.ERROR_NETWORK,
+                        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> minOf(2000L * consecutiveErrors, 10000L)
+                        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> 1500L
+                        else -> 800L
                     }
                     if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
-                        // Destroy stale recognizer and reinitialize before retrying
-                        try { speechRecognizer.destroy() } catch (e: Exception) { /* ignore */ }
                         mainHandler?.postDelayed({
                             initSpeechRecognizer()
                             startListening()
@@ -173,7 +191,7 @@ class RecordingService : Service() {
     }
 
     private fun startListening() {
-        if (!::speechRecognizer.isInitialized) return
+        if (speechRecognizer == null) initSpeechRecognizer()
         if (!isListening && state == State.RECORDING && !isPaused) {
             try {
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -188,10 +206,11 @@ class RecordingService : Service() {
                     putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
                 }
                 isListening = true
-                speechRecognizer.startListening(intent)
+                speechRecognizer?.startListening(intent)
             } catch (e: Exception) {
-                Log.e(TAG, "Error starting listening", e)
+                Log.e(TAG, "startListening failed", e)
                 isListening = false
+                broadcastError("Failed to start speech recognition: ${e.message}")
             }
         }
     }
@@ -199,18 +218,21 @@ class RecordingService : Service() {
     private fun stopListening() {
         try {
             isListening = false
-            if (::speechRecognizer.isInitialized) {
-                speechRecognizer.stopListening()
-                speechRecognizer.cancel()
-            }
+            speechRecognizer?.stopListening()
+            speechRecognizer?.cancel()
         } catch (e: Exception) {
-            Log.e(TAG, "Error stopping listening", e)
+            Log.e(TAG, "stopListening error", e)
         }
     }
 
+    private fun destroyRecognizer() {
+        try { speechRecognizer?.destroy() } catch (_: Exception) {}
+        speechRecognizer = null
+    }
+
     private fun startDurationTimer() {
-        durationTimer?.cancel()
-        durationTimer = serviceScope.launch {
+        durationJob?.cancel()
+        durationJob = serviceScope.launch {
             while (isActive && state == State.RECORDING) {
                 val elapsed = System.currentTimeMillis() - startTime
                 sendBroadcast(Intent(BROADCAST_STATE).apply {
@@ -229,10 +251,16 @@ class RecordingService : Service() {
         })
     }
 
-    private fun broadcastState(state: State) {
+    private fun broadcastState(s: State) {
         sendBroadcast(Intent(BROADCAST_STATE).apply {
-            putExtra(EXTRA_STATE, state.name)
+            putExtra(EXTRA_STATE, s.name)
             putExtra(EXTRA_DURATION, System.currentTimeMillis() - startTime)
+        })
+    }
+
+    private fun broadcastError(message: String) {
+        sendBroadcast(Intent(BROADCAST_ERROR).apply {
+            putExtra(EXTRA_ERROR_MSG, message)
         })
     }
 
@@ -248,7 +276,7 @@ class RecordingService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Shefali")
+            .setContentTitle("Minutes")
             .setContentText(status)
             .setSmallIcon(R.drawable.ic_mic)
             .setContentIntent(pendingIntent)
@@ -259,21 +287,8 @@ class RecordingService : Service() {
     }
 
     private fun updateNotification(status: String) {
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, buildNotification(status))
-    }
-
-    private fun createNotificationChannel() {
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Shefali Recording",
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = "Shows while Shefali is actively recording a meeting"
-            setShowBadge(true)
-        }
         (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .createNotificationChannel(channel)
+            .notify(NOTIFICATION_ID, buildNotification(status))
     }
 
     private fun speechErrorMessage(error: Int) = when (error) {
@@ -282,24 +297,21 @@ class RecordingService : Service() {
         SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Insufficient permissions"
         SpeechRecognizer.ERROR_NETWORK -> "Network error"
         SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Network timeout"
-        SpeechRecognizer.ERROR_NO_MATCH -> "No match"
+        SpeechRecognizer.ERROR_NO_MATCH -> "No speech detected"
         SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Recognizer busy"
         SpeechRecognizer.ERROR_SERVER -> "Server error"
         SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Speech timeout"
-        else -> "Unknown error"
+        else -> "Unknown error ($error)"
     }
 
     override fun onBind(intent: Intent?) = null
 
     override fun onDestroy() {
         isRunning = false
-        durationTimer?.cancel()
+        durationJob?.cancel()
         serviceScope.cancel()
-        try {
-            if (::speechRecognizer.isInitialized) {
-                speechRecognizer.destroy()
-            }
-        } catch (e: Exception) { /* ignore */ }
+        stopListening()
+        destroyRecognizer()
         super.onDestroy()
     }
 }

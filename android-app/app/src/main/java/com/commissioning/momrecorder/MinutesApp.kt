@@ -4,17 +4,17 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 
-class MomRecorderApp : Application() {
+class MinutesApp : Application() {
     override fun onCreate() {
         super.onCreate()
-        createChannels()
-    }
-
-    private fun createChannels() {
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(
-            NotificationChannel("recording_channel", "Shefali Recording", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Shows while Shefali is actively recording a meeting"
+            NotificationChannel(
+                "recording_channel",
+                "Minutes Recording",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Active while Minutes is recording a meeting"
             }
         )
     }

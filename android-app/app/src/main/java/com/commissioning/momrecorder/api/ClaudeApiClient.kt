@@ -1,7 +1,9 @@
 package com.commissioning.momrecorder.api
 
 import android.util.Log
+import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import com.google.gson.JsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -21,6 +23,24 @@ class ClaudeApiClient(private val apiKey: String) {
         private const val BASE_URL = "https://api.anthropic.com/v1/messages"
         private const val MODEL = "claude-haiku-4-5-20251001"
         private const val MAX_TOKENS = 4096
+    }
+
+    suspend fun validateApiKey(key: String): Boolean {
+        return try {
+            val body = buildRequestJson("claude-haiku-4-5-20251001", "Say OK", 10)
+            val request = Request.Builder()
+                .url(BASE_URL)
+                .addHeader("x-api-key", key)
+                .addHeader("anthropic-version", "2023-06-01")
+                .addHeader("content-type", "application/json")
+                .post(body.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            val response = client.newCall(request).execute()
+            response.isSuccessful
+        } catch (e: Exception) {
+            Log.e(TAG, "validateApiKey failed", e)
+            false
+        }
     }
 
     suspend fun generateMom(transcript: String, meetingContext: MeetingContext): String {
@@ -102,26 +122,28 @@ Rules:
 - Return ONLY valid JSON, no markdown, no extra text"""
     }
 
+    private fun buildRequestJson(model: String, prompt: String, maxTokens: Int): JsonObject {
+        val message = JsonObject().apply {
+            addProperty("role", "user")
+            addProperty("content", prompt)
+        }
+        val messages = com.google.gson.JsonArray().apply { add(message) }
+        return JsonObject().apply {
+            addProperty("model", model)
+            addProperty("max_tokens", maxTokens)
+            add("messages", messages)
+        }
+    }
+
     private fun callClaude(prompt: String): String {
-        val requestJson = """
-            {
-                "model": "$MODEL",
-                "max_tokens": $MAX_TOKENS,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": ${escapeJsonString(prompt)}
-                    }
-                ]
-            }
-        """.trimIndent()
+        val requestJson = buildRequestJson(MODEL, prompt, MAX_TOKENS)
 
         val request = Request.Builder()
             .url(BASE_URL)
             .addHeader("x-api-key", apiKey)
             .addHeader("anthropic-version", "2023-06-01")
             .addHeader("content-type", "application/json")
-            .post(requestJson.toRequestBody("application/json".toMediaType()))
+            .post(requestJson.toString().toRequestBody("application/json".toMediaType()))
             .build()
 
         val response = client.newCall(request).execute()
@@ -156,21 +178,7 @@ Rules:
         }
     }
 
-    private fun escapeJsonString(s: String): String {
-        val sb = StringBuilder("\"")
-        for (c in s) {
-            when (c) {
-                '"' -> sb.append("\\\"")
-                '\\' -> sb.append("\\\\")
-                '\n' -> sb.append("\\n")
-                '\r' -> sb.append("\\r")
-                '\t' -> sb.append("\\t")
-                else -> sb.append(c)
-            }
-        }
-        sb.append("\"")
-        return sb.toString()
-    }
+
 }
 
 data class MeetingContext(

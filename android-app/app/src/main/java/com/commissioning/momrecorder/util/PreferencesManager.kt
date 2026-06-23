@@ -29,6 +29,10 @@ class PreferencesManager(context: Context) {
         get() = prefs.getString(KEY_MODEL, MODEL_HAIKU) ?: MODEL_HAIKU
         set(value) = prefs.edit { putString(KEY_MODEL, value) }
 
+    var onboardingDone: Boolean
+        get() = prefs.getBoolean(KEY_ONBOARDING_DONE, false)
+        set(value) = prefs.edit { putBoolean(KEY_ONBOARDING_DONE, value) }
+
     fun hasApiKey() = claudeApiKey.isNotBlank()
 
     companion object {
@@ -37,6 +41,7 @@ class PreferencesManager(context: Context) {
         private const val KEY_PARTICIPANTS = "participant_names"
         private const val KEY_AUTO_GENERATE = "auto_generate_mom"
         private const val KEY_MODEL = "selected_model"
+        private const val KEY_ONBOARDING_DONE = "onboarding_done"
 
         const val MODEL_HAIKU = "claude-haiku-4-5-20251001"
         const val MODEL_SONNET = "claude-sonnet-4-6"

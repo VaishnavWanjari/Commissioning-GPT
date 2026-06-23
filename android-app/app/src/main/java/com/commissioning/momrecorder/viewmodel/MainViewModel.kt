@@ -2,8 +2,6 @@ package com.commissioning.momrecorder.viewmodel
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import com.commissioning.momrecorder.api.ClaudeApiClient
 import com.commissioning.momrecorder.api.MeetingContext
@@ -16,44 +14,61 @@ import com.commissioning.momrecorder.model.TranscriptEntry
 import com.commissioning.momrecorder.util.MomStorage
 import com.commissioning.momrecorder.util.PreferencesManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val prefs = PreferencesManager(application)
+    val prefs = PreferencesManager(application)
     private var currentSession: RecordingSession? = null
 
-    private val _transcriptEntries = MutableLiveData<List<TranscriptEntry>>(emptyList())
-    val transcriptEntries: LiveData<List<TranscriptEntry>> = _transcriptEntries
+    // Recording state
+    private val _recordingState = MutableStateFlow(RecordingState.IDLE)
+    val recordingState: StateFlow<RecordingState> = _recordingState.asStateFlow()
 
-    private val _fullTranscript = MutableLiveData("")
-    val fullTranscript: LiveData<String> = _fullTranscript
+    private val _duration = MutableStateFlow(0L)
+    val duration: StateFlow<Long> = _duration.asStateFlow()
 
-    private val _recordingState = MutableLiveData(RecordingState.IDLE)
-    val recordingState: LiveData<RecordingState> = _recordingState
+    // Transcript
+    private val _transcriptEntries = MutableStateFlow<List<TranscriptEntry>>(emptyList())
+    val transcriptEntries: StateFlow<List<TranscriptEntry>> = _transcriptEntries.asStateFlow()
 
-    private val _duration = MutableLiveData(0L)
-    val duration: LiveData<Long> = _duration
+    private val _fullTranscript = MutableStateFlow("")
+    val fullTranscript: StateFlow<String> = _fullTranscript.asStateFlow()
 
-    private val _momGenerating = MutableLiveData(false)
-    val momGenerating: LiveData<Boolean> = _momGenerating
+    // MOM generation
+    private val _momGenerating = MutableStateFlow(false)
+    val momGenerating: StateFlow<Boolean> = _momGenerating.asStateFlow()
 
-    private val _generatedMom = MutableLiveData<MomReport?>()
-    val generatedMom: LiveData<MomReport?> = _generatedMom
+    // One-shot events
+    private val _snackbar = MutableSharedFlow<String>()
+    val snackbar: SharedFlow<String> = _snackbar.asSharedFlow()
 
-    private val _error = MutableLiveData<String?>()
-    val error: LiveData<String?> = _error
+    private val _momGenerated = MutableSharedFlow<MomReport>()
+    val momGenerated: SharedFlow<MomReport> = _momGenerated.asSharedFlow()
 
-    private val _savedMoms = MutableLiveData<List<MomReport>>(emptyList())
-    val savedMoms: LiveData<List<MomReport>> = _savedMoms
+    // History
+    private val _savedMoms = MutableStateFlow<List<MomReport>>(emptyList())
+    val savedMoms: StateFlow<List<MomReport>> = _savedMoms.asStateFlow()
 
-    private val _trackerItems = MutableLiveData<List<TrackerItem>>(emptyList())
-    val trackerItems: LiveData<List<TrackerItem>> = _trackerItems
+    // Tracker
+    private val _trackerItems = MutableStateFlow<List<TrackerItem>>(emptyList())
+    val trackerItems: StateFlow<List<TrackerItem>> = _trackerItems.asStateFlow()
+
+    private var currentTrackerFilter = "ALL"
 
     init {
         loadSavedMoms()
     }
+
+    // ===================== SESSION =====================
 
     fun startSession(title: String = "") {
         currentSession = RecordingSession(title = title)
@@ -65,82 +80,66 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun appendTranscript(text: String, isFinal: Boolean) {
         val entry = TranscriptEntry(text = text, isFinal = isFinal)
         currentSession?.entries?.add(entry)
-        val current = _transcriptEntries.value?.toMutableList() ?: mutableListOf()
-        if (!isFinal) {
-            // Replace last partial with new partial
-            if (current.isNotEmpty() && !current.last().isFinal) {
-                current[current.lastIndex] = entry
+        _transcriptEntries.update { current ->
+            val list = current.toMutableList()
+            if (!isFinal) {
+                if (list.isNotEmpty() && !list.last().isFinal) list[list.lastIndex] = entry
+                else list.add(entry)
             } else {
-                current.add(entry)
+                if (list.isNotEmpty() && !list.last().isFinal) list[list.lastIndex] = entry
+                else list.add(entry)
             }
-        } else {
-            // Remove any trailing partial, add final
-            if (current.isNotEmpty() && !current.last().isFinal) {
-                current[current.lastIndex] = entry
-            } else {
-                current.add(entry)
-            }
+            list
         }
-        _transcriptEntries.value = current
         _fullTranscript.value = currentSession?.fullTranscript() ?: ""
     }
 
-    fun updateDuration(millis: Long) {
-        _duration.value = millis
-    }
-
+    fun updateDuration(millis: Long) { _duration.value = millis }
     fun setPaused() { _recordingState.value = RecordingState.PAUSED }
     fun setResumed() { _recordingState.value = RecordingState.RECORDING }
+    fun stopSession() { _recordingState.value = RecordingState.STOPPED }
+    fun resetToIdle() { _recordingState.value = RecordingState.IDLE }
 
-    fun stopSession() {
-        currentSession?.let { it.copy(endTime = System.currentTimeMillis()) }
-        _recordingState.value = RecordingState.STOPPED
-    }
+    // ===================== MOM GENERATION =====================
 
     fun generateMom(meetingTitle: String = "", platform: String = "Video Call") {
-        val transcript = _fullTranscript.value ?: ""
+        val transcript = _fullTranscript.value
         if (transcript.isBlank()) {
-            _error.value = "No transcript available. Please record a meeting first."
+            emitSnackbar("No transcript available. Record a meeting first.")
             return
         }
         val apiKey = prefs.claudeApiKey
         if (apiKey.isBlank()) {
-            _error.value = "Claude API key not configured. Please go to Settings."
+            emitSnackbar("Claude API key not set. Go to Settings.")
             return
         }
-
         _momGenerating.value = true
         viewModelScope.launch {
             try {
                 val client = ClaudeApiClient(apiKey)
-                val context = MeetingContext(
+                val ctx = MeetingContext(
                     title = meetingTitle,
                     platform = platform.ifBlank { prefs.defaultMeetingPlatform }
                 )
-                val jsonResponse = withContext(Dispatchers.IO) {
-                    client.generateMom(transcript, context)
-                }
-                val report = MomParser.parse(jsonResponse, transcript)
-                _generatedMom.value = report
-                currentSession?.mom = report
-                withContext(Dispatchers.IO) {
-                    MomStorage.saveMom(getApplication(), report)
-                }
+                val json = withContext(Dispatchers.IO) { client.generateMom(transcript, ctx) }
+                val report = MomParser.parse(json, transcript)
+                withContext(Dispatchers.IO) { MomStorage.saveMom(getApplication(), report) }
                 loadSavedMoms()
+                _momGenerated.emit(report)
             } catch (e: Exception) {
-                _error.value = "Failed to generate MOM: ${e.message}"
+                emitSnackbar("Failed to generate MOM: ${e.message}")
             } finally {
                 _momGenerating.value = false
             }
         }
     }
 
+    // ===================== HISTORY =====================
+
     fun loadSavedMoms() {
         viewModelScope.launch(Dispatchers.IO) {
             val moms = MomStorage.loadAll(getApplication())
-            withContext(Dispatchers.Main) {
-                _savedMoms.value = moms
-            }
+            withContext(Dispatchers.Main) { _savedMoms.value = moms }
         }
     }
 
@@ -151,17 +150,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun loadTrackerItems(filter: String = "ALL") {
+    fun getMomById(id: String): MomReport? = _savedMoms.value.find { it.id == id }
+
+    // ===================== TRACKER =====================
+
+    fun loadTrackerItems(filter: String = currentTrackerFilter) {
+        currentTrackerFilter = filter
         viewModelScope.launch(Dispatchers.IO) {
             val moms = MomStorage.loadAll(getApplication())
             val items = moms.flatMap { mom ->
                 mom.actionItems.map { action ->
-                    TrackerItem(
-                        actionItem = action,
-                        meetingTitle = mom.meetingTitle,
-                        meetingId = mom.id,
-                        meetingDate = mom.date
-                    )
+                    TrackerItem(action, mom.meetingTitle, mom.id, mom.date)
                 }
             }.filter { item ->
                 when (filter) {
@@ -170,35 +169,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     "COMPLETED" -> item.actionItem.status == ActionStatus.COMPLETED
                     else -> true
                 }
-            }.sortedWith(
-                compareBy(
-                    { it.actionItem.status.ordinal },
-                    { it.actionItem.priority.ordinal }
-                )
-            )
-            withContext(Dispatchers.Main) {
-                _trackerItems.value = items
-            }
+            }.sortedWith(compareBy({ it.actionItem.status.ordinal }, { it.actionItem.priority.ordinal }))
+            withContext(Dispatchers.Main) { _trackerItems.value = items }
         }
     }
 
     fun updateActionStatus(meetingId: String, actionId: String, newStatus: ActionStatus) {
         viewModelScope.launch(Dispatchers.IO) {
             MomStorage.updateActionStatus(getApplication(), meetingId, actionId, newStatus)
-            withContext(Dispatchers.Main) {
-                val currentFilter = _currentTrackerFilter
-                loadTrackerItems(currentFilter)
-            }
+            withContext(Dispatchers.Main) { loadTrackerItems(currentTrackerFilter) }
         }
     }
 
-    private var _currentTrackerFilter = "ALL"
-    fun setTrackerFilter(filter: String) {
-        _currentTrackerFilter = filter
-        loadTrackerItems(filter)
+    // ===================== HELPERS =====================
+
+    suspend fun validateApiKey(key: String): Boolean = withContext(Dispatchers.IO) {
+        ClaudeApiClient(key).validateApiKey(key)
     }
 
-    fun clearError() { _error.value = null }
+    private fun emitSnackbar(msg: String) {
+        viewModelScope.launch { _snackbar.emit(msg) }
+    }
 
     enum class RecordingState { IDLE, RECORDING, PAUSED, STOPPED }
 }

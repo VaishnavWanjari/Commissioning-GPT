@@ -1,40 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Primary Brand Colors -->
-    <color name="primary">#1565C0</color>
-    <color name="primary_dark">#0D47A1</color>
-    <color name="primary_light">#1976D2</color>
-    <color name="primary_container">#DBEAFE</color>
+    <color name="primary">#3730A3</color>
+    <color name="primary_dark">#312E81</color>
     <color name="on_primary">#FFFFFF</color>
-    <color name="on_primary_container">#1565C0</color>
-
-    <!-- Secondary -->
-    <color name="secondary">#F57C00</color>
-    <color name="secondary_container">#FFE0B2</color>
-    <color name="on_secondary_container">#E65100</color>
-
-    <!-- Surface -->
-    <color name="background">#F5F7FF</color>
+    <color name="accent">#6366F1</color>
+    <color name="recording_red">#EF4444</color>
     <color name="surface">#FFFFFF</color>
-    <color name="surface_variant">#F0F4FF</color>
-    <color name="on_surface">#1A1A2E</color>
-    <color name="on_surface_variant">#666680</color>
-
-    <!-- Error -->
-    <color name="error">#D32F2F</color>
-    <color name="on_error">#FFFFFF</color>
-
-    <!-- Priority Colors -->
-    <color name="priority_high">#C62828</color>
-    <color name="priority_high_bg">#FFEBEE</color>
-    <color name="priority_medium">#E65100</color>
-    <color name="priority_medium_bg">#FFF3E0</color>
-    <color name="priority_low">#2E7D32</color>
-    <color name="priority_low_bg">#E8F5E9</color>
-
-    <!-- Recording accent -->
-    <color name="recording_red">#FF3B5C</color>
-
-    <!-- Status Bar -->
-    <color name="status_bar">#0D47A1</color>
+    <color name="background">#F8F9FF</color>
+    <color name="on_surface">#1E1B4B</color>
+    <color name="on_surface_variant">#6B7280</color>
+    <color name="error">#EF4444</color>
+    <color name="status_bar">#312E81</color>
+    <color name="priority_high">#EF4444</color>
+    <color name="priority_medium">#F59E0B</color>
+    <color name="priority_low">#10B981</color>
 </resources>
