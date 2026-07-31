@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -22,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +48,7 @@ import com.collagex.app.collage.CarouselSplitter
 import com.collagex.app.data.AppViewModel
 import com.collagex.app.ui.components.PrimaryButton
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CarouselScreen(viewModel: AppViewModel, onNext: () -> Unit, onBack: () -> Unit) {
     val state by viewModel.state.collectAsState()

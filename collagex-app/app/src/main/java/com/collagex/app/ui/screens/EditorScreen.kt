@@ -45,8 +45,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -230,7 +232,7 @@ private fun DraggableOverlay(
     val font = FontCatalog.byId(overlay.fontId)
 
     Box(
-        modifier = Modifier.centeredAt { androidx.compose.ui.unit.IntOffset(xPx.toInt(), yPx.toInt()) },
+        modifier = Modifier.centeredAt { IntOffset(xPx.toInt(), yPx.toInt()) },
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -269,17 +271,17 @@ private fun DraggableOverlay(
     }
 }
 
-private fun androidx.compose.ui.Modifier.offsetPixels(x: Int, y: Int) =
-    this.then(androidx.compose.ui.layout.layout { measurable, constraints ->
+private fun Modifier.offsetPixels(x: Int, y: Int): Modifier =
+    layout { measurable, constraints ->
         val placeable = measurable.measure(constraints)
         layout(placeable.width, placeable.height) { placeable.place(x, y) }
-    })
+    }
 
-private fun androidx.compose.ui.Modifier.centeredAt(offset: () -> androidx.compose.ui.unit.IntOffset) =
-    this.then(androidx.compose.ui.layout.layout { measurable, constraints ->
+private fun Modifier.centeredAt(offset: () -> IntOffset): Modifier =
+    layout { measurable, constraints ->
         val placeable = measurable.measure(constraints)
         layout(placeable.width, placeable.height) {
             val off = offset()
             placeable.place(off.x - placeable.width / 2, off.y - placeable.height / 2)
         }
-    })
+    }
