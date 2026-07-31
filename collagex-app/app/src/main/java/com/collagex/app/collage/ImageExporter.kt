@@ -58,4 +58,22 @@ object ImageExporter {
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         return Intent.createChooser(intent, "Share via")
     }
+
+    private const val INSTAGRAM_PACKAGE = "com.instagram.android"
+
+    /**
+     * Instagram's public "share to Stories" contract (developers.facebook.com/docs/instagram/sharing-to-stories) —
+     * no API key or login needed, just an installed Instagram app. Returns null if Instagram isn't installed,
+     * so callers can fall back to the generic share sheet.
+     */
+    fun instagramStoryIntent(context: Context, imageUri: android.net.Uri): Intent? {
+        val intent = Intent("com.instagram.share.ADD_TO_STORY").apply {
+            setDataAndType(imageUri, "image/png")
+            putExtra("source_application", context.packageName)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        if (intent.resolveActivity(context.packageManager) == null) return null
+        context.grantUriPermission(INSTAGRAM_PACKAGE, imageUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        return intent
+    }
 }

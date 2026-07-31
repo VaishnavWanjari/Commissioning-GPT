@@ -86,3 +86,46 @@ data class CanvasOverlay(
 )
 
 enum class CaptionMood { TRAVEL, BIRTHDAY, GYM, CAFE, LOVE, FRIENDS, GRADUATION }
+
+/** Which composer builds the canvas: algorithmic templates, or free drag/pinch/rotate placement. */
+enum class EditorMode { STRUCTURED, FREEFORM }
+
+/** Per-photo placement in [EditorMode.FREEFORM] — driven by drag/pinch/rotate gestures. */
+data class PhotoTransform(
+    val xFrac: Float = 0.5f,
+    val yFrac: Float = 0.5f,
+    val scale: Float = 1f,
+    val rotationDeg: Float = 0f,
+)
+
+sealed class BackgroundSpec {
+    data class Solid(val color: Color) : BackgroundSpec()
+    data class Gradient(val start: Color, val end: Color) : BackgroundSpec()
+}
+
+object GradientCatalog {
+    val gradients: List<BackgroundSpec.Gradient> = listOf(
+        BackgroundSpec.Gradient(Color(0xFFFFC3A0), Color(0xFFFFAFBD)),
+        BackgroundSpec.Gradient(Color(0xFFA1C4FD), Color(0xFFC2E9FB)),
+        BackgroundSpec.Gradient(Color(0xFFFBC2EB), Color(0xFFA6C1EE)),
+        BackgroundSpec.Gradient(Color(0xFFFDCBF1), Color(0xFFE6DEE9)),
+        BackgroundSpec.Gradient(Color(0xFF84FAB0), Color(0xFF8FD3F4)),
+        BackgroundSpec.Gradient(Color(0xFF2C3E50), Color(0xFF4CA1AF)),
+        BackgroundSpec.Gradient(Color(0xFF0F2027), Color(0xFF2C5364)),
+        BackgroundSpec.Gradient(Color(0xFFFFE29F), Color(0xFFFFA99F)),
+    )
+}
+
+/** Decorative border drawn around the whole finished collage, applied last (after grading). */
+data class CollageFrame(val id: String, val displayName: String)
+
+object CollageFrameCatalog {
+    val frames: List<CollageFrame> = listOf(
+        CollageFrame("none", "None"),
+        CollageFrame("thin_white", "Thin White"),
+        CollageFrame("thick_white", "Thick White"),
+        CollageFrame("rounded_black", "Rounded Black"),
+    )
+
+    fun byId(id: String): CollageFrame = frames.firstOrNull { it.id == id } ?: frames.first()
+}

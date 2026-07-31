@@ -1,13 +1,16 @@
 package com.collagex.app.ui.screens
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -23,11 +26,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -37,16 +44,20 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -56,12 +67,18 @@ import com.collagex.app.collage.ColorGradingPresets
 import com.collagex.app.collage.FontCatalog
 import com.collagex.app.collage.StickerCatalog
 import com.collagex.app.data.AppViewModel
+import com.collagex.app.data.BackgroundSpec
 import com.collagex.app.data.CanvasOverlay
+import com.collagex.app.data.CollageFrameCatalog
+import com.collagex.app.data.EditorMode
+import com.collagex.app.data.GradientCatalog
 import com.collagex.app.data.OverlayType
+import com.collagex.app.data.PhotoTransform
 import com.collagex.app.ui.components.PrimaryButton
 
-private enum class EditorTab { GRADE, TEXT, STICKERS }
+private enum class EditorTab { GRADE, TEXT, STICKERS, BACKGROUND, FRAME }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(viewModel: AppViewModel, onNext: () -> Unit, onBack: () -> Unit) {
     val state by viewModel.state.collectAsState()
@@ -80,27 +97,69 @@ fun EditorScreen(viewModel: AppViewModel, onNext: () -> Unit, onBack: () -> Unit
             }
         },
         bottomBar = {
-            PrimaryButton(text = "Continue", modifier = Modifier.padding(24.dp), onClick = onNext)
+            PrimaryButton(
+                text = "Continue",
+                modifier = Modifier.padding(24.dp),
+                onClick = {
+                    viewModel.commitFreeform()
+                    onNext()
+                },
+            )
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
+                SegmentedButton(
+                    selected = state.mode == EditorMode.STRUCTURED,
+                    onClick = { viewModel.setMode(EditorMode.STRUCTURED) },
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                ) { Text("Templates") }
+                SegmentedButton(
+                    selected = state.mode == EditorMode.FREEFORM,
+                    onClick = { viewModel.setMode(EditorMode.FREEFORM) },
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                ) { Text("Freeform") }
+            }
+
+            val canvasBackground: Modifier = when (val bg = state.background) {
+                is BackgroundSpec.Solid -> if (state.mode == EditorMode.STRUCTURED) {
+                    Modifier.background(MaterialTheme.colorScheme.surfaceVariant)
+                } else {
+                    Modifier.background(bg.color)
+                }
+                is BackgroundSpec.Gradient -> Modifier.background(Brush.linearGradient(listOf(bg.start, bg.end)))
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(24.dp)
                     .aspectRatio(1f)
                     .clip(RoundedCornerShape(20.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .then(canvasBackground)
                     .onSizeChanged { canvasSize = it },
             ) {
-                val bitmap = state.finalComposite ?: state.baseCollage
-                if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = "Collage preview",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                if (state.mode == EditorMode.STRUCTURED) {
+                    val bitmap = state.finalComposite ?: state.baseCollage
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = "Collage preview",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                } else {
+                    state.decodedPhotos.forEachIndexed { index, bmp ->
+                        val transform = state.photoTransforms.getOrElse(index) { PhotoTransform() }
+                        FreeformPhotoTile(
+                            index = index,
+                            bitmap = bmp,
+                            transform = transform,
+                            canvasSize = canvasSize,
+                            onTransform = { updated -> viewModel.updatePhotoTransform(index, updated) },
+                        )
+                    }
                 }
                 state.overlays.forEach { overlay ->
                     DraggableOverlay(
@@ -116,11 +175,13 @@ fun EditorScreen(viewModel: AppViewModel, onNext: () -> Unit, onBack: () -> Unit
                 Tab(selected = tab == EditorTab.GRADE, onClick = { tab = EditorTab.GRADE }, text = { Text("Color") })
                 Tab(selected = tab == EditorTab.TEXT, onClick = { tab = EditorTab.TEXT }, text = { Text("Text") })
                 Tab(selected = tab == EditorTab.STICKERS, onClick = { tab = EditorTab.STICKERS }, text = { Text("Stickers") })
+                Tab(selected = tab == EditorTab.BACKGROUND, onClick = { tab = EditorTab.BACKGROUND }, text = { Text("Background") })
+                Tab(selected = tab == EditorTab.FRAME, onClick = { tab = EditorTab.FRAME }, text = { Text("Frame") })
             }
 
             when (tab) {
                 EditorTab.GRADE -> LazyRow(
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                    contentPadding = PaddingValues(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(ColorGradingPresets.presets) { preset ->
@@ -158,7 +219,7 @@ fun EditorScreen(viewModel: AppViewModel, onNext: () -> Unit, onBack: () -> Unit
                 }
 
                 EditorTab.STICKERS -> LazyRow(
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                    contentPadding = PaddingValues(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     items(StickerCatalog.stickers) { sticker ->
@@ -166,6 +227,63 @@ fun EditorScreen(viewModel: AppViewModel, onNext: () -> Unit, onBack: () -> Unit
                             text = sticker,
                             fontSize = 28.sp,
                             modifier = Modifier.clickable { viewModel.addStickerOverlay(sticker) },
+                        )
+                    }
+                }
+
+                EditorTab.BACKGROUND -> LazyRow(
+                    contentPadding = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(Color.White)
+                                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                                .clickable { viewModel.setBackground(BackgroundSpec.Solid(Color.White)) },
+                        )
+                    }
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black)
+                                .clickable { viewModel.setBackground(BackgroundSpec.Solid(Color.Black)) },
+                        )
+                    }
+                    items(GradientCatalog.gradients) { gradient ->
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(Brush.linearGradient(listOf(gradient.start, gradient.end)))
+                                .clickable { viewModel.setBackground(gradient) },
+                        )
+                    }
+                }
+
+                EditorTab.FRAME -> LazyRow(
+                    contentPadding = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(CollageFrameCatalog.frames) { frame ->
+                        val selected = frame.id == state.collageFrameId
+                        Text(
+                            text = frame.displayName,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .border(
+                                    width = 1.dp,
+                                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                    shape = RoundedCornerShape(12.dp),
+                                )
+                                .clickable { viewModel.setCollageFrame(frame.id) }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
                         )
                     }
                 }
@@ -221,12 +339,62 @@ private fun AddTextDialog(onDismiss: () -> Unit, onConfirm: (String, String) -> 
 }
 
 @Composable
+private fun FreeformPhotoTile(
+    index: Int,
+    bitmap: Bitmap,
+    transform: PhotoTransform,
+    canvasSize: IntSize,
+    onTransform: (PhotoTransform) -> Unit,
+) {
+    val currentTransform = rememberUpdatedState(transform)
+    val currentCanvasSize = rememberUpdatedState(canvasSize)
+    val xPx = transform.xFrac * canvasSize.width
+    val yPx = transform.yFrac * canvasSize.height
+    val tileSizePx = minOf(canvasSize.width, canvasSize.height) * 0.42f
+    val tileSizeDp = with(LocalDensity.current) { tileSizePx.toDp() }
+
+    Image(
+        bitmap = bitmap.asImageBitmap(),
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+            .centeredAt { IntOffset(xPx.toInt(), yPx.toInt()) }
+            .size(tileSizeDp)
+            .graphicsLayer {
+                scaleX = transform.scale
+                scaleY = transform.scale
+                rotationZ = transform.rotationDeg
+            }
+            .border(4.dp, Color.White)
+            .pointerInput(index) {
+                detectTransformGestures { _, pan, zoom, rotation ->
+                    val size = currentCanvasSize.value
+                    if (size.width == 0 || size.height == 0) return@detectTransformGestures
+                    val t = currentTransform.value
+                    val newX = ((t.xFrac * size.width) + pan.x) / size.width
+                    val newY = ((t.yFrac * size.height) + pan.y) / size.height
+                    onTransform(
+                        t.copy(
+                            xFrac = newX.coerceIn(0f, 1f),
+                            yFrac = newY.coerceIn(0f, 1f),
+                            scale = (t.scale * zoom).coerceIn(0.4f, 2.5f),
+                            rotationDeg = t.rotationDeg + rotation,
+                        ),
+                    )
+                }
+            },
+    )
+}
+
+@Composable
 private fun DraggableOverlay(
     overlay: CanvasOverlay,
     canvasSize: IntSize,
     onMove: (CanvasOverlay) -> Unit,
     onRemove: () -> Unit,
 ) {
+    val currentOverlay = rememberUpdatedState(overlay)
+    val currentCanvasSize = rememberUpdatedState(canvasSize)
     val xPx = overlay.xFrac * canvasSize.width
     val yPx = overlay.yFrac * canvasSize.height
     val font = FontCatalog.byId(overlay.fontId)
@@ -239,10 +407,12 @@ private fun DraggableOverlay(
             modifier = Modifier.pointerInput(overlay.id) {
                 detectDragGestures { change, drag ->
                     change.consume()
-                    if (canvasSize.width == 0 || canvasSize.height == 0) return@detectDragGestures
-                    val newX = ((overlay.xFrac * canvasSize.width) + drag.x) / canvasSize.width
-                    val newY = ((overlay.yFrac * canvasSize.height) + drag.y) / canvasSize.height
-                    onMove(overlay.copy(xFrac = newX.coerceIn(0f, 1f), yFrac = newY.coerceIn(0f, 1f)))
+                    val size = currentCanvasSize.value
+                    if (size.width == 0 || size.height == 0) return@detectDragGestures
+                    val o = currentOverlay.value
+                    val newX = ((o.xFrac * size.width) + drag.x) / size.width
+                    val newY = ((o.yFrac * size.height) + drag.y) / size.height
+                    onMove(o.copy(xFrac = newX.coerceIn(0f, 1f), yFrac = newY.coerceIn(0f, 1f)))
                 }
             },
         ) {

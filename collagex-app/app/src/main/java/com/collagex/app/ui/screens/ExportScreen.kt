@@ -74,10 +74,24 @@ fun ExportScreen(viewModel: AppViewModel, onDone: () -> Unit) {
         bottomBar = {
             Column(modifier = Modifier.padding(24.dp)) {
                 PrimaryButton(
-                    text = "Share",
+                    text = "Share to Instagram Stories",
                     modifier = Modifier.padding(bottom = 12.dp),
                     onClick = {
                         val bmp = viewModel.flattenForExport() ?: exportable ?: return@PrimaryButton
+                        scope.launch {
+                            val uri = ImageExporter.cacheForSharing(context, bmp, "collagex_${System.currentTimeMillis()}.png")
+                            val storyIntent = ImageExporter.instagramStoryIntent(context, uri)
+                            val intent = storyIntent ?: ImageExporter.shareIntent(context, listOf(uri))
+                            runCatching { context.startActivity(intent) }
+                                .onFailure { context.startActivity(ImageExporter.shareIntent(context, listOf(uri))) }
+                        }
+                    },
+                )
+                SecondaryButton(
+                    text = "Share elsewhere",
+                    modifier = Modifier.padding(bottom = 12.dp),
+                    onClick = {
+                        val bmp = viewModel.flattenForExport() ?: exportable ?: return@SecondaryButton
                         scope.launch {
                             val uri = ImageExporter.cacheForSharing(context, bmp, "collagex_${System.currentTimeMillis()}.png")
                             context.startActivity(ImageExporter.shareIntent(context, listOf(uri)))
